@@ -1,0 +1,30 @@
+# Віртуальне середовище
+.venv/
+__pycache__/
+*.pyc
+
+# Особисті налаштування та паролі
+configs.py
+.env
+.env.*
+!.env.example
+
+# Службові файли Airflow
+airflow_runtime/
+
+# Завантажені та оброблені дані
+landing/
+bronze/
+silver/
+gold/
+
+# Службові файли Spark
+checkpoints/
+spark-warehouse/
+metastore_db/
+artifacts/
+*.log
+
+# Архіви для здачі
+*.zip
+*.tar.gz

@@ -1,0 +1,82 @@
+name: svitlana-fp
+
+services:
+  spark-master:
+    image: svitlana-airflow-spark:fp
+    user: "${LOCAL_UID:-1000}:0"
+    hostname: spark-master
+    environment:
+      CONNECTION_CHECK_MAX_COUNT: "0"
+    command:
+      - bash
+      - -c
+      - |
+        exec "$$SPARK_HOME/bin/spark-class" \
+          org.apache.spark.deploy.master.Master \
+          --host spark-master \
+          --port 7077 \
+          --webui-port 8080
+    volumes:
+      - .:/opt/project
+    ports:
+      - "127.0.0.1:8082:8080"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; s = socket.create_connection(('spark-master', 7077), 5); s.close()"
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+
+  spark-worker:
+    image: svitlana-airflow-spark:fp
+    user: "${LOCAL_UID:-1000}:0"
+    hostname: spark-worker
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    environment:
+      CONNECTION_CHECK_MAX_COUNT: "0"
+      SPARK_WORKER_DIR: /tmp/spark-work
+    command:
+      - bash
+      - -c
+      - |
+        exec "$$SPARK_HOME/bin/spark-class" \
+          org.apache.spark.deploy.worker.Worker \
+          --host spark-worker \
+          --port 7078 \
+          --webui-port 8081 \
+          --cores 2 \
+          --memory 1G \
+          spark://spark-master:7077
+    volumes:
+      - .:/opt/project
+
+  airflow:
+    image: svitlana-airflow-spark:fp
+    user: "${LOCAL_UID:-1000}:0"
+    hostname: airflow
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      spark-worker:
+        condition: service_started
+    environment:
+      CONNECTION_CHECK_MAX_COUNT: "0"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: utc
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+      AIRFLOW__WEBSERVER__WORKERS: "1"
+    command: standalone
+    volumes:
+      - ./airflow_runtime:/opt/airflow
+      - .:/opt/project
+      - ./project_solution.py:/opt/airflow/dags/project_solution.py:ro
+    ports:
+      - "127.0.0.1:8081:8080"
